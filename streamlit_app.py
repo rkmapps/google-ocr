@@ -1,12 +1,20 @@
 import streamlit as st
 import json
 import re
-import os
-import datetime  # Import datetime module for timestamp
+import datetime
 from google.cloud import vision
 from google.cloud import storage
 
-os.environ["GOOGLE_APPLICATION_CREDENTIALS"] = './probable-splice-343604-126faf518d0f.json'
+# Load Google Cloud credentials from Streamlit secrets
+try:
+    google_cloud_credentials_str = st.secrets["google_cloud_credentials"]
+    google_cloud_credentials = json.loads(google_cloud_credentials_str)
+except KeyError:
+    st.error("Google Cloud credentials not found in Streamlit secrets. Please configure them in .streamlit/secrets.toml")
+    st.stop() # Stop the app if credentials are not found
+
+# Initialize Google Cloud Storage client with credentials
+storage_client = storage.Client.from_service_account_info(google_cloud_credentials)
 
 # Set up your Google Cloud Storage bucket and project ID
 bucket_name = 'ocr-rkmm-docs'
@@ -14,9 +22,6 @@ input_folder_name = 'input'
 output_folder_name = 'output'
 gcs_source_uri = 'gs://ocr-rkmm-docs/input/'
 gcs_destination_uri = 'gs://ocr-rkmm-docs/output/'
-
-# Initialize Google Cloud Storage client
-storage_client = storage.Client()
 
 def main():
     st.title("PDF to TEXT using Google OCR API")
@@ -33,6 +38,7 @@ def main():
 
     if uploaded_file is not None:
         if st.button("Upload") and not st.session_state.upload_completed:
+            # Ensure the blob path is correct for the uploaded file
             blob = storage_client.bucket(bucket_name).blob(f'{input_folder_name}/{uploaded_file.name}')
             blob.upload_from_file(uploaded_file)
             st.session_state.upload_completed = True
@@ -63,7 +69,8 @@ def async_detect_document(gcs_source_uri, gcs_destination_uri):
     # How many pages should be grouped into each json output file.
     batch_size = 100
 
-    client = vision.ImageAnnotatorClient()
+    # Initialize Vision AI client with credentials
+    vision_client = vision.ImageAnnotatorClient.from_service_account_info(google_cloud_credentials)
 
     feature = vision.Feature(
         type_=vision.Feature.Type.DOCUMENT_TEXT_DETECTION)
@@ -80,7 +87,7 @@ def async_detect_document(gcs_source_uri, gcs_destination_uri):
         features=[feature], input_config=input_config,
         output_config=output_config)
 
-    operation = client.async_batch_annotate_files(
+    operation = vision_client.async_batch_annotate_files( # Use vision_client here
         requests=[async_request])
 
     print('Waiting for the operation to finish.')
@@ -151,4 +158,4 @@ def delete_temporary_files(gcs_destination_uri):
     print(f"Folder and its contents deleted from {bucket_name}.")
 
 if __name__ == "__main__":
-    main()                    
+    main()
