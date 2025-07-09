@@ -5,6 +5,12 @@ import datetime
 from google.cloud import vision
 from google.cloud import storage
 
+# Get password from secrets
+correct_password = st.secrets.get("password")
+
+# Simple login form
+password = st.text_input("Enter password to access the app", type="password")
+
 # Load Google Cloud credentials from Streamlit secrets
 try:
     google_cloud_credentials_str = st.secrets["google_cloud_credentials"]
@@ -157,5 +163,10 @@ def delete_temporary_files(gcs_destination_uri):
 
     print(f"Folder and its contents deleted from {bucket_name}.")
 
-if __name__ == "__main__":
-    main()
+if __name__ == "__main__":    
+    if password == correct_password:
+        st.success("Access granted!")
+        main()        
+    else:
+        st.warning("Enter the correct password to continue.")
+        st.stop()
